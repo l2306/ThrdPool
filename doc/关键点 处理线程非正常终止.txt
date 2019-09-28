@@ -1,0 +1,113 @@
+
+背景知识：
+    一：typeof :
+        typeof不是标准C的运算符，是gcc的一个扩展，与sizeof()语义类似，
+        sizeof(exp)返回exp长度，typeof(exp)返回exp的类型。
+    
+        int a;
+        typeof(&a) b;		a 为int型。所以&a为int*.	b 为int* 类型
+    
+        typedef struct{
+            int size;
+            char t;
+        } node, *pnode;
+    
+        typeof(((node*)0)->t) w;
+        即	w的类型为：node的t的类型
+        这里0并不是真正的变量，可以把它理解为一个替代使用的符号。
+            可理解为一个被赋值了的变量，这个数可以不是0，随便什么数字都可以。
+    
+    kernel中定义如下：
+    
+    二：offsetof
+    
+        #define offsetof(TYPE, MEMBER) ((size_t)&((TYPE*)0)->MEMBER)
+        (TYPE*)0 	表示：0是指向TYPE的指针 。
+        则 &(TYPE*)0->MEMBER 表示：TYPE类型的实体0的变量MEMBER的地址，
+            因为从0开始，所以它的地址就成为offset. 再用size_t强制转换，
+            就是从struct头到成员变量MEMBER的offset.
+    
+    三：container_of(ptr, type, member)
+    
+        #define container_of(ptr, type, member) 	({			/
+            const typeof(((type*)0)->member) *_mptr = (ptr);	/
+            (type*)((char*)_mptr - offsetof(type,member));})
+        (type*)0: 							表明某个实体为type类型的。
+        ((type*)0)->member					表明这个实体的某个成员变量。
+        typeof(((type*)0)->member) *_mptr	表明定了一个指向此成员变量类型 的指针。
+    
+        offsetof(type,member)				表明成员变量member到结构体类型type头的offset.
+        (type*)((char*)_mptr - offsetof(type,member) 
+        表明：返回的是一个指向type的指针，此指针指向一个type类型的实体。
+            而参数ptr则是这个实体中的某一个成员变量位置。
+    
+
+Posix的线程终止有两种：正常终止和非正常终止。
+	线程主动调用pthread_exit()或者从线程函数中return都将使线程正常退出，这是可预见的退出方式；
+	非正常终止是线程在其他线程的干预下，或者由于自身运行出错（如访问非法地址）而退出，这种退出方式是不可预见的。
+
+不论是可预见的线程终止还是异常终止，都会存在资源释放的问题，
+	在不考虑因运行出错而退出的前提下，如何保证线程终止时能顺利的释放掉自己所占用的资源，特别是锁资源
+
+最经常出现的情形是资源独占锁的使用：
+	线程为了访问临界资源而为其加上锁，但在访问过程中被外界取消，
+		如果线程处于响应取消状态，且采用异步方式响应，
+		或者在打开独占锁以前的运行路径上存在取消点，则该临界资源将永远处于锁定状态得不到释放。
+	外界取消操作是不可预见的，因此的确需要一个机制来简化用于资源释放的编程。
+
+POSIX线程API提供了一个pthread_cleanup_push()/pthread_cleanup_pop()函数对用于自动释放资源 
+从pthread_cleanup_push()到pthread_cleanup_pop()之间的
+	的程序段中的终止动作（包括调用 pthread_exit()和取消点终止）
+	都将执行pthread_cleanup_push()所指定的清理函数
+	void pthread_cleanup_push(void (*routine)(void*),  void *arg)
+	void pthread_cleanup_pop(int execute)
+
+
+pthread_cleanup_push()/pthread_cleanup_pop()采用先入后出的栈结构管理，
+	void routine(void *arg)	调用pthread_cleanup_push()时压入清理函数栈，
+		多次调用pthread_cleanup_push()将在清理函数栈中形成一个函数链，
+			在执行该函数链时按照压栈的相反顺序弹出。
+	execute	表示执行到pthread_cleanup_pop()时是否在弹出清理函数的同时执行该函数，
+		为0不执行，非0为执行；
+		这个参数并不影响异常终止时清理函数的执行。
+
+pthread_cleanup_push()/pthread_cleanup_pop()是以宏方式实现的，pthread.h中的宏定义：
+		#define pthread_cleanup_push(routine,arg)                 /                    
+		  { struct _pthread_cleanup_buffer _buffer;               /                    
+		    _pthread_cleanup_push (&_buffer, (routine), (arg));
+		#define pthread_cleanup_pop(execute)                      /                   
+		    _pthread_cleanup_pop (&_buffer, (execute)); }
+		    
+可见,pthread_cleanup_push()带有一个"{"，而pthread_cleanup_pop()带有一个"}"，
+因此这两个函数必须成对出现，且必须位于程序的同一级别的代码段中才能通过编译。
+
+
+
+例:	当线程在"do some work"中终止时，将主动调用pthread_mutex_unlock(mut)，以完成解锁动作。
+	"work"中终止时，将主动调用pthread_mutex_unlock(mut)，以完成解锁动作。
+		pthread_cleanup_push(pthread_mutex_unlock, (void *) &mut);
+		pthread_mutex_lock(&mut);
+		/* do some work */
+		pthread_mutex_unlock(&mut);
+		pthread_cleanup_pop(0);
+注意，如果线程处于PTHREAD_CANCEL_ASYNCHRONOUS状态，上述代码段就有可能出错，
+	CANCEL事件可能在pthread_cleanup_push()和pthread_mutex_lock()之间
+		或在pthread_mutex_unlock()和pthread_cleanup_pop()之间发生，
+	从而导致清理函数unlock一个并没有加锁的mutex变量，造成错误。
+
+
+
+因此，使用清理函数时，都应该暂时设置线程 PTHREAD_CANCEL_DEFERRED模式。即设置“取消推迟”
+	{
+		int oldtype;		//用于设置“”状态后，还原状态
+		pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
+		pthread_cleanup_push(routine, arg);
+		...
+		pthread_cleanup_pop(execute);
+		pthread_setcanceltype(oldtype, NULL);
+	}
+	
+	为此，POSIX的Linux实现中还提供了一对不保证可移植的扩展函数	(少用)
+		pthread_cleanup_push_defer_np()/pthread_cleanup_pop_defer_np()
+
+

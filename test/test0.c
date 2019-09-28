@@ -21,7 +21,7 @@ void* th_fun(void *task)
 {
 //RUNHERE;
 	taskNode *node=(taskNode*)task;
-	usleep(1000);
+	//usleep(1);
 	switch (node->iTaskType)
 	{
 	case 0:
@@ -47,28 +47,22 @@ void* th_fun(void *task)
 
 int main ( int argc, char * argv[] )
 {
-	ThrdPool* thrdpool = ThrdPool_init(100, 10, 4, 2, (pfun)th_fun);
+	ThrdPool* thrdpool = ThrdPool_init(10000, 10, 4, 2, (pfun)th_fun);
 	printf("managerInit \n");
 
-//	printf("inputTsk %x\n", managerInterface(thrdpool, inputTsk));
-
-	for(i=0;i<100;i++)
+	for(i=0;i<10000;i++)
 	{	
 		taskNode *task = (taskNode*)malloc(sizeof(taskNode));
 		task->iTaskType = i%3;
 		task->sockfd =i;
-		usleep(1);
+		//usleep(1);
 		ThrdPool_addTask(thrdpool ,(void*)task);
 	}
 
 	printf("mng_tsk2work %x\n", ThrdPool_run(thrdpool));
-
 	printf("mng_thrNumCtrl %x\n", ThrdPool_NumCtl(thrdpool));
 
-//	inputTsk(thrdpool);
-
-
-	sleep(20);
+	sleep(5);
 	ThrdPool_destroy(thrdpool);
 
 	exit(0);
@@ -76,7 +70,7 @@ int main ( int argc, char * argv[] )
 
 /*
 查看内存泄漏
-	gcc *.c -g -o aa -lpthread -rdynamic -lThrdPool
-	valgrind --leak-check=yes ./aa
+	gcc *.c -g -o t1 -lpthread -rdynamic -lThrdPool
+	valgrind --leak-check=yes ./t1
 */
 
