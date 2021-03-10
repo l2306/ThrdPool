@@ -40,7 +40,7 @@ typedef struct _thcontrol{
 //任务链表的节点
 typedef struct taskList{
 	void*			task;				//任务节点内容，由开发人员自己定义数据结构
-	struct lst_node head;				//通用链表的指针
+	struct list_node head;				//通用链表的指针
 }taskNodeZ; 
 
 //任务池
@@ -68,7 +68,7 @@ typedef struct threadNode{
 //线程链表结构
 typedef struct threadList{
     threadNode*		thread;
-    struct lst_node head;
+    struct list_node head;
 }threadNodeZ;
 
 //线程池的数据结构
@@ -101,7 +101,7 @@ extern TaskPool* TaskPoolInit()
 	pthread_mutex_init(&taskpool->mutex,NULL);
 	pthread_cond_init(&taskpool->cond_nofull, NULL);
 	pthread_cond_init(&taskpool->cond_noempty, NULL);
-	INIT_lst_HEAD(&taskpool->pool->head);
+	INIT_list_HEAD(&taskpool->pool->head);
 	taskpool->t_curNum = 0;
 	return taskpool;
 }
@@ -120,7 +120,7 @@ void *TaskPoolAdd(TaskPool* taskpool, void *tasknode)			//添加任务节点到 
 	}
 	taskNodeZ* tmp_tasklist	= (taskNodeZ*)malloc(sizeof(taskNodeZ));
 	tmp_tasklist->task		= tasknode;
-	lst_add(&tmp_tasklist->head,&taskpool->pool->head); 		//添加到头节点之后
+	list_add(&tmp_tasklist->head,&taskpool->pool->head); 		//添加到头节点之后
 	taskpool->t_curNum++;
 	pthread_mutex_unlock(&(taskpool->mutex));					//解锁
 	
@@ -136,11 +136,11 @@ void *TaskPoolDel(TaskPool* taskpool)							//删除任务(甩出 task)//del fro
 		pthread_cond_wait(&(taskpool->cond_noempty), &(taskpool->mutex));
 	}
 	size_t 				offset	=((size_t) &((taskNodeZ*)0)->head);
-	struct lst_node* 	Pos 	= taskpool->pool->head.prev;	//链表尾部取值
+	struct list_node* 	Pos 	= taskpool->pool->head.prev;	//链表尾部取值
 	taskNodeZ* 	temp_tasklist 	= (taskNodeZ*)((size_t)(char*)Pos-offset);
 	void* 				task 	= (temp_tasklist->task);
 	
-	lst_del(taskpool->pool->head.prev);
+	list_del(taskpool->pool->head.prev);
 	free(temp_tasklist);
 	taskpool->t_curNum--;
 	pthread_mutex_unlock(&(taskpool->mutex));
@@ -154,7 +154,7 @@ extern ThreadPool* ThreadPoolInit()
 	threadpool->pool			= (threadNodeZ*)malloc(sizeof(threadNodeZ));
 	pthread_mutex_init(&threadpool->mutex,NULL);
 	pthread_cond_init(&threadpool->cond_idle,NULL);
-	INIT_lst_HEAD(&threadpool->pool->head);						//INIT_lst_HEAD(threadpool->pool);
+	INIT_list_HEAD(&threadpool->pool->head);						//INIT_list_HEAD(threadpool->pool);
 	return threadpool;
 }
 
@@ -190,7 +190,7 @@ extern int incrThreadPool(ThreadPool* threadpool)
 	if (err != 0)
 		printf("can't create thread: %s\n", strerror(err));
 	new_threadlist->thread->busy	=0;
-	lst_add(&new_threadlist->head,&threadpool->pool->head);			//调用通用链表的函数实现添加
+	list_add(&new_threadlist->head,&threadpool->pool->head);			//调用通用链表的函数实现添加
 	threadpool->t_curNum++;
 	threadpool->t_idleNum++; 
 	pthread_mutex_unlock(&(threadpool->mutex));						//解锁
@@ -213,7 +213,7 @@ extern int decrThreadPool(ThreadPool* threadpool)
 	size_t offset = ((size_t) &((threadNodeZ*)0)->head);
 	
 	//找到一个不忙的线程
-	struct lst_node* Pos = threadpool->pool->head.prev;//线程节点 的指针
+	struct list_node* Pos = threadpool->pool->head.prev;//线程节点 的指针
 	do{
 		tmp_threadlist = (threadNodeZ*)((size_t)(char*)Pos-offset);
 		Pos = (Pos->prev);
@@ -224,7 +224,7 @@ extern int decrThreadPool(ThreadPool* threadpool)
 		printf("can't decrease thread: %s\n", strerror(err));
 	pthread_join(tmp_threadlist->thread->tid, (void**)NULL);
 	
-	lst_del(&tmp_threadlist->head);
+	list_del(&tmp_threadlist->head);
 	free(tmp_threadlist->thread);
 	free(tmp_threadlist);
 	threadpool->t_curNum--;
@@ -297,9 +297,9 @@ void loop_task2work(void* thrdpool)
 //如果是空闲的，该子线程通过cond信号阻塞，知道本管理线程发信号通知它开始工作。
 int addTaskToThread(ThreadPool* threadpool, void *task)//任务节点投递到线程池的细节：
 {
-	if(threadpool==NULL || lst_empty(&threadpool->pool->head)) 
+	if(threadpool==NULL || list_empty(&threadpool->pool->head)) 
 		return -1;
-	struct lst_node* Pos = threadpool->pool->head.next;				//Pos 定位下一个空闲线程节点的指针位置
+	struct list_node* Pos = threadpool->pool->head.next;				//Pos 定位下一个空闲线程节点的指针位置
 	while(Pos){
 		size_t        offset         = ((size_t) &((threadNodeZ*)0)->head);
 		threadNodeZ* threadnodez     = (threadNodeZ*)((size_t)(char*)Pos-offset);
@@ -413,7 +413,7 @@ int destroyThreadPool(ThrdPool* thrdpool)
 	size_t 			offset 			= ((size_t)&((threadNodeZ*)0)->head);
 	while (threadpool->t_curNum)//动态增长线程已经销毁，t_curNum不会死锁
 	{
-		struct lst_node* Pos 	= threadpool->pool->head.prev;
+		struct list_node* Pos 	= threadpool->pool->head.prev;
 		tmp_threadlist 			= (threadNodeZ*)((size_t)(char*)Pos - offset);
 		Pos 					= (Pos->prev);
 		int err = pthread_cancel(tmp_threadlist->thread->tid);
@@ -421,7 +421,7 @@ int destroyThreadPool(ThrdPool* thrdpool)
 			printf("can't decrease thread: %s\n", strerror(err));
 		pthread_join(tmp_threadlist->thread->tid, (void**)NULL);
 		
-		lst_del(&tmp_threadlist->head);
+		list_del(&tmp_threadlist->head);
 		free(tmp_threadlist->thread);
 		free(tmp_threadlist);
 		threadpool->t_curNum--;

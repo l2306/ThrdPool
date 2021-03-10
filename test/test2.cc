@@ -13,7 +13,7 @@ static int j=0;
 
 void* th_fun(void *task)         
 {
-++j;
+    ++j;
 	task_t* t2=(task_t*)task;
 	t2->run();
     delete t2;
@@ -30,7 +30,7 @@ int main ( int argc, char * argv[] )
 	Data_1 tsks[10000];
 	for(int i=0;i<10000;i++)
 	{	
-		tsks[i].id=i;
+		tsks[i].unit=i;
 		tsks[i].pswd=100*i;
 		task_t*  t1=task_binder::gen_ptr<Func1,Data_1*>(fun_tsk1, &tsks[i]);
 		//usleep(1);

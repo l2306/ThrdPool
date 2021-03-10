@@ -14,11 +14,20 @@ typedef  struct  taskNode{
 }taskNode;
 
 
+pthread_mutex_t	mtx;
 static int i=0;
 //automic_t at=0;
 
+void cnt_add()
+{
+    pthread_mutex_lock(&(mtx));
+    ++i;
+    pthread_mutex_unlock(&(mtx));
+}
+
 void* th_fun(void *task)         
 {
+    cnt_add();
 //RUNHERE;
 	taskNode *node=(taskNode*)task;
 	//usleep(1);
@@ -26,16 +35,16 @@ void* th_fun(void *task)
 	{
 	case 0:
 //		printf("--0--	work ptid = %x task->value = %d %d\n", (int)pthread_self(), node->sockfd, i++);
-	sleep(1);
-	printf("--0--	work ptid = %x task->value = %d %d\n", (int)pthread_self(), node->sockfd,i);
-	sleep(1);
-	printf("--0--	work ptid = %x task->value = %d %d\n", (int)pthread_self(), node->sockfd, i++);
+        sleep(1);
+        printf("--0--	work ptid = %x task->value = %d %d\n", (int)pthread_self(), node->sockfd,i);
+        sleep(1);
+        printf("--0--	work ptid = %x task->value = %d %d\n", (int)pthread_self(), node->sockfd, i);
 		break;
 	case 1:
-		printf("--1--	work ptid = %x task->value = %d %d\n", (int)pthread_self(), node->sockfd, i++);
+		printf("--1--	work ptid = %x task->value = %d %d\n", (int)pthread_self(), node->sockfd, i);
 		break;
 	case 2:
-		printf("--2--	work ptid = %x task->value = %d %d\n", (int)pthread_self(), node->sockfd, i++);
+		printf("--2--	work ptid = %x task->value = %d %d\n", (int)pthread_self(), node->sockfd, i);
 		break;
 	default:
 		break;
@@ -47,6 +56,9 @@ void* th_fun(void *task)
 
 int main ( int argc, char * argv[] )
 {
+    pthread_mutex_init(&mtx,NULL);
+    
+    
 	ThrdPool* thrdpool = ThrdPool_init(10000, 10, 4, 2, (pfun)th_fun);
 	printf("managerInit \n");
 
@@ -65,7 +77,7 @@ int main ( int argc, char * argv[] )
 	sleep(5);
 	ThrdPool_destroy(thrdpool);
 
-	exit(0);
+	//exit(0);
 }
 
 /*

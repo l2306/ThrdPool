@@ -155,13 +155,14 @@ void prt(void* p)
 
 //
 typedef struct{
-	int id;
+	int unit;
 	int pswd;
 } Data_1;
 typedef void (*Func1)(Data_1* typ);
 void fun_tsk1(Data_1* typ)
 {
-	cout<<"Data_1 " << typ->id << " " << typ->pswd << endl;
+	cout<<"Data_1"<< endl;
+    printf("Data_1 {unit:%d , pswd:%d}\n", typ->unit, typ->pswd);
 }
 
 int test()
@@ -170,7 +171,7 @@ int test()
 	task_t tsk = task_binder::gen(prt, cs);
 	tsk.run();
 	
-	Data_1 data1 = {11,22 };
+	Data_1 data1 = {11, 22};
 	task_t  t1=task_binder::gen<Func1,Data_1*>(fun_tsk1, &data1);
 	t1.run();
 
